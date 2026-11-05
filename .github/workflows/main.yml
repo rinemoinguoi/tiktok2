@@ -87,45 +87,36 @@ jobs:
           if (-not (Test-Path $VisualKey)) { New-Item -Path $VisualKey -Force }
           Set-ItemProperty -Path $VisualKey -Name "VisualFXSetting" -Value 2 -Force
 
-      - name: Install Tailscale
+      - name: Install Tailscale via Chocolatey
         run: |
-          $tsUrl = "https://tailscale.com"
-          $installerPath = Join-Path -Path $env:TEMP -ChildPath "tailscale.msi"
-          
-          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
-          
-          # Ép cài đặt hệ thống cho tất cả user (ALLUSERS=1) để vào đúng thư mục Program Files
-          Start-Process msiexec.exe -ArgumentList "/i `"$installerPath`" /quiet /norestart ALLUSERS=1" -NoNewWindow -Wait
-          
-          Remove-Item $installerPath -Force
+          Write-Host "Đang cài đặt Tailscale chính thức qua choco..."
+          # Choco đã được cài sẵn trên GitHub Actions Runner nên lệnh này chạy trực tiếp cực kỳ ổn định
+          choco install tailscale -y --no-progress
+          Write-Host "Cài đặt Tailscale hoàn tất!"
 
       - name: Establish Tailscale Connection
         run: |
-          # Kiểm tra các đường dẫn có thể có của tailscale.exe
-          $path1 = Join-Path -Path $env:ProgramFiles -ChildPath "Tailscale\tailscale.exe"
-          $path2 = "C:\Program Local\Tailscale\tailscale.exe"
-          $tailscaleExe = $null
+          # Định vị file cài đặt chuẩn sau khi chạy qua Chocolatey
+          $tailscaleExe = Join-Path -Path $env:ProgramFiles -ChildPath "Tailscale\tailscale.exe"
 
-          # Chờ tối đa 45 giây để bộ cài msi hoàn tất xuất file ra đĩa cứng
+          # Chờ tối đa 30 giây đề phòng dịch vụ nền khởi động chậm
           $timeout = 0
-          while ($timeout -lt 9) {
-              if (Test-Path $path1) { $tailscaleExe = $path1; break }
-              if (Test-Path $path2) { $tailscaleExe = $path2; break }
+          while (-not (Test-Path $tailscaleExe) -and $timeout -lt 6) {
               Start-Sleep -Seconds 5
               $timeout++
           }
 
-          if (-not $tailscaleExe) {
-              Write-Error "Không tìm thấy file tailscale.exe ở bất kỳ thư mục hệ thống nào. Quá trình cài đặt đã lỗi."
+          if (-not (Test-Path $tailscaleExe)) {
+              Write-Error "Không tìm thấy file tailscale.exe tại vị trí mặc định."
               exit 1
           }
 
           Write-Host "Tìm thấy Tailscale tại: $tailscaleExe"
 
-          # Khởi chạy Tailscale bằng Auth Key lấy từ Secrets
+          # Khởi chạy Tailscale kết nối với Auth Key lấy từ Secrets
           & $tailscaleExe up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
           
-          # Wait for Tailscale to assign an IP
+          # Đợi cấp phát IP Tailscale 
           $tsIP = $null
           $retries = 0
           while (-not $tsIP -and $retries -lt 10) {
@@ -144,7 +135,7 @@ jobs:
         run: |
           Write-Host "Tailscale IP: $env:TAILSCALE_IP"
           
-          # Test connectivity using Test-NetConnection against the Tailscale IP on port 3389
+          # Test connectivity bằng Test-NetConnection
           $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
           if (-not $testResult.TcpTestSucceeded) {
               Write-Error "TCP connection to RDP port 3389 failed"
@@ -160,7 +151,7 @@ jobs:
           Write-Host "Password: RI7a11032012"
           Write-Host "==================`n"
           
-          # Keep runner active indefinitely (or until manually cancelled)
+          # Giữ máy ảo hoạt động liên tục
           while ($true) {
               Write-Host "[$(Get-Date)] RDP Active - Use Ctrl+C in workflow to terminate"
               Start-Sleep -Seconds 300
