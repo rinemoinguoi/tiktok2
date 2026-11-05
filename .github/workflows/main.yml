@@ -87,14 +87,11 @@ jobs:
           if (-not (Test-Path $VisualKey)) { New-Item -Path $VisualKey -Force }
           Set-ItemProperty -Path $VisualKey -Name "VisualFXSetting" -Value 2 -Force
 
-      - name: Pre-install Google Chrome
+      - name: Pre-install Google Chrome via WinGet
         run: |
-          Write-Host "Đang cài đặt Google Chrome để bạn sẵn sàng sử dụng..."
-          $chromeUrl = "https://google.com"
-          $chromePath = Join-Path -Path $env:TEMP -ChildPath "chrome_installer.exe"
-          Invoke-WebRequest -Uri $chromeUrl -OutFile $chromePath
-          Start-Process $chromePath -ArgumentList "/silent /install" -Wait
-          Remove-Item $chromePath -Force
+          Write-Host "Đang cài đặt Google Chrome qua Microsoft WinGet..."
+          # Sử dụng winget để tải bản Chrome chính thức mới nhất một cách an toàn
+          winget install --id Google.Chrome --silent --accept-source-agreements --accept-package-agreements
           Write-Host "Cài đặt Google Chrome thành công!"
 
       - name: Install Tailscale
