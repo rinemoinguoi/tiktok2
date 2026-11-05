@@ -1,4 +1,4 @@
-name: dz
+name: RDP
 
 on:
   workflow_dispatch:
@@ -60,22 +60,40 @@ jobs:
       - name: Install Tailscale
         run: |
           $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
-          $installerPath = "$env:TEMP/tailscale.msi"
+          $installerPath = Join-Path -Path $env:TEMP -ChildPath "tailscale.msi"
           
           Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
+          
+          # Sử dụng Start-Process với -Wait để ép hệ thống đợi cài đặt xong hoàn toàn
+          Start-Process msiexec.exe -ArgumentList "/i `"$installerPath`" /quiet /norestart" -NoNewWindow -Wait
+          
           Remove-Item $installerPath -Force
 
       - name: Establish Tailscale Connection
         run: |
-          # Bring up Tailscale with the provided auth key and set a unique hostname
-          & "$env:ProgramFiles/Tailscale/tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
+          # Tạo đường dẫn động chuẩn Windows bằng Join-Path để tránh lỗi \t
+          $tailscaleExe = Join-Path -Path $env:ProgramFiles -ChildPath "Tailscale\tailscale.exe"
+          
+          # Chờ tối đa 30 giây đề phòng dịch vụ Tailscale vừa cài xong chưa khởi động kịp
+          $timeout = 0
+          while (-not (Test-Path $tailscaleExe) -and $timeout -lt 6) {
+              Start-Sleep -Seconds 5
+              $timeout++
+          }
+
+          if (-not (Test-Path $tailscaleExe)) {
+              Write-Error "Không tìm thấy file tailscale.exe tại: $tailscaleExe. Quá trình cài đặt có thể đã thất bại."
+              exit 1
+          }
+
+          # Khởi chạy Tailscale
+          & $tailscaleExe up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
           
           # Wait for Tailscale to assign an IP
           $tsIP = $null
           $retries = 0
           while (-not $tsIP -and $retries -lt 10) {
-              $tsIP = & "$env:ProgramFiles/Tailscale/tailscale.exe" ip -4
+              $tsIP = & $tailscaleExe ip -4
               Start-Sleep -Seconds 5
               $retries++
           }
