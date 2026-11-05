@@ -1,4 +1,4 @@
-name: RDP
+name: RDP - Gaming Edition
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ jobs:
           # (Optional) Restart the Remote Desktop service to ensure changes take effect
           Restart-Service -Name TermService -Force
 
-      - name: Create RDP User and Auto-Logon
+      - name: Create RDP User, Auto-Logon and Disable Sleep/Lock
         run: |
           $password = "123456"
           $securePass = ConvertTo-SecureString $password -AsPlainText -Force
@@ -37,11 +37,27 @@ jobs:
           Add-LocalGroupMember -Group "Administrators" -Member "RDP"
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
           
-          # Cấu hình Windows tự động đăng nhập cho User RDP
+          # 1. Cấu hình Windows tự động đăng nhập cho User RDP
           $RegistryPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
           Set-ItemProperty -Path $RegistryPath -Name "AutoAdminLogon" -Value "1" -Force
           Set-ItemProperty -Path $RegistryPath -Name "DefaultUserName" -Value "RDP" -Force
           Set-ItemProperty -Path $RegistryPath -Name "DefaultPassword" -Value $password -Force
+          
+          # 2. Vô hiệu hóa Screen Saver (Màn hình chờ) và Khóa màn hình khi rảnh
+          $ControlPanelPath = "HKCU:\Control Panel\Desktop"
+          Set-ItemProperty -Path $ControlPanelPath -Name "ScreenSaveActive" -Value "0" -Force
+          Set-ItemProperty -Path $ControlPanelPath -Name "ScreenSaverIsSecure" -Value "0" -Force
+          Set-ItemProperty -Path $ControlPanelPath -Name "ScreenTimeOutValue" -Value "0" -Force
+          
+          # 3. Tắt tính năng Sleep / Turn off screen bằng powercfg
+          powercfg /change monitor-timeout-ac 0
+          powercfg /change monitor-timeout-dc 0
+          powercfg /change disk-timeout-ac 0
+          powercfg /change disk-timeout-dc 0
+          powercfg /change standby-timeout-ac 0
+          powercfg /change standby-timeout-dc 0
+          powercfg /change hibernate-timeout-ac 0
+          powercfg /change hibernate-timeout-dc 0
           
           echo "RDP_CREDS=User: RDP | Password: $password" >> $env:GITHUB_ENV
           
@@ -49,6 +65,36 @@ jobs:
               Write-Error "User creation failed"
               exit 1
           }
+
+      - name: Optimize System for Gaming & Performance
+        run: |
+          # 1. Bật chế độ tối ưu hóa hiệu năng tối đa (Ultimate Performance)
+          powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+
+          # 2. Bật dịch vụ Âm thanh (Cần thiết cho một số game để không bị crash khi mở)
+          Set-Service -Name "Audiosrv" -StartupType Automatic
+          Start-Service -Name "Audiosrv" -ErrorAction SilentlyContinue
+
+          # 3. Tăng tốc đồ họa phần cứng qua Registry (Mở khóa DirectX / Giảm lag RDP)
+          $RdpKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services"
+          if (-not (Test-Path $RdpKey)) { New-Item -Path $RdpKey -Force }
+          Set-ItemProperty -Path $RdpKey -Name "bUseHardwareGraphicsAdapter" -Value 1 -Force
+          Set-ItemProperty -Path $RdpKey -Name "GetGraphicsCaptureDisabled" -Value 0 -Force
+          
+          # 4. Tắt hiệu ứng hoạt họa Windows để máy chạy mượt hơn nữa
+          $VisualKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects"
+          if (-not (Test-Path $VisualKey)) { New-Item -Path $VisualKey -Force }
+          Set-ItemProperty -Path $VisualKey -Name "VisualFXSetting" -Value 2 -Force
+
+      - name: Pre-install Google Chrome
+        run: |
+          Write-Host "Đang cài đặt Google Chrome để bạn sẵn sàng sử dụng..."
+          $chromeUrl = "https://google.com"
+          $chromePath = Join-Path -Path $env:TEMP -ChildPath "chrome_installer.exe"
+          Invoke-WebRequest -Uri $chromeUrl -OutFile $chromePath
+          Start-Process $chromePath -ArgumentList "/silent /install" -Wait
+          Remove-Item $chromePath -Force
+          Write-Host "Cài đặt Google Chrome thành công!"
 
       - name: Install Tailscale
         run: |
@@ -114,7 +160,7 @@ jobs:
           Write-Host "`n=== RDP ACCESS ==="
           Write-Host "Address: $env:TAILSCALE_IP"
           Write-Host "Username: RDP"
-          Write-Host "Password: 123456 (Auto logon enabled)"
+          Write-Host "Password: 123456 (Auto logon, Audio & Gaming Tweak Enabled)"
           Write-Host "==================`n"
           
           # Keep runner active indefinitely (or until manually cancelled)
