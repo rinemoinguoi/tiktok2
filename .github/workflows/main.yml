@@ -31,13 +31,14 @@ jobs:
 
       - name: Create RDP User, Auto-Logon and Disable Sleep/Lock
         run: |
-          $password = "123456"
+          # Đặt mật khẩu mới theo yêu cầu của bạn
+          $password = "RI7a11032012"
           $securePass = ConvertTo-SecureString $password -AsPlainText -Force
           New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires
           Add-LocalGroupMember -Group "Administrators" -Member "RDP"
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
           
-          # 1. Cấu hình Windows tự động đăng nhập cho User RDP
+          # 1. Cấu hình Windows tự động đăng nhập cho User RDP (Vào thẳng Desktop không hỏi pass)
           $RegistryPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
           Set-ItemProperty -Path $RegistryPath -Name "AutoAdminLogon" -Value "1" -Force
           Set-ItemProperty -Path $RegistryPath -Name "DefaultUserName" -Value "RDP" -Force
@@ -160,7 +161,7 @@ jobs:
           Write-Host "`n=== RDP ACCESS ==="
           Write-Host "Address: $env:TAILSCALE_IP"
           Write-Host "Username: RDP"
-          Write-Host "Password: 123456 (Auto logon, Audio & Gaming Tweak Enabled)"
+          Write-Host "Password: RI7a11032012"
           Write-Host "==================`n"
           
           # Keep runner active indefinitely (or until manually cancelled)
