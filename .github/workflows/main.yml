@@ -116,8 +116,8 @@ jobs:
               exit 1
           }
 
-          # Khởi chạy Tailscale
-          & $tailscaleExe up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
+          # Đã sửa lại đúng tên biến TAILSCALE_AUTHKEY khớp với GitHub của bạn
+          & $tailscaleExe up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
           
           # Wait for Tailscale to assign an IP
           $tsIP = $null
