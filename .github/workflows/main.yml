@@ -94,29 +94,35 @@ jobs:
           
           Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
           
-          # Sử dụng Start-Process với -Wait để ép hệ thống đợi cài đặt xong hoàn toàn
-          Start-Process msiexec.exe -ArgumentList "/i `"$installerPath`" /quiet /norestart" -NoNewWindow -Wait
+          # Ép cài đặt hệ thống cho tất cả user (ALLUSERS=1) để vào đúng thư mục Program Files
+          Start-Process msiexec.exe -ArgumentList "/i `"$installerPath`" /quiet /norestart ALLUSERS=1" -NoNewWindow -Wait
           
           Remove-Item $installerPath -Force
 
       - name: Establish Tailscale Connection
         run: |
-          # Tạo đường dẫn động chuẩn Windows bằng Join-Path để tránh lỗi \t
-          $tailscaleExe = Join-Path -Path $env:ProgramFiles -ChildPath "Tailscale\tailscale.exe"
-          
-          # Chờ tối đa 30 giây đề phòng dịch vụ Tailscale vừa cài xong chưa khởi động kịp
+          # Kiểm tra các đường dẫn có thể có của tailscale.exe
+          $path1 = Join-Path -Path $env:ProgramFiles -ChildPath "Tailscale\tailscale.exe"
+          $path2 = "C:\Program Local\Tailscale\tailscale.exe"
+          $tailscaleExe = $null
+
+          # Chờ tối đa 45 giây để bộ cài msi hoàn tất xuất file ra đĩa cứng
           $timeout = 0
-          while (-not (Test-Path $tailscaleExe) -and $timeout -lt 6) {
+          while ($timeout -lt 9) {
+              if (Test-Path $path1) { $tailscaleExe = $path1; break }
+              if (Test-Path $path2) { $tailscaleExe = $path2; break }
               Start-Sleep -Seconds 5
               $timeout++
           }
 
-          if (-not (Test-Path $tailscaleExe)) {
-              Write-Error "Không tìm thấy file tailscale.exe tại: $tailscaleExe. Quá trình cài đặt có thể đã thất bại."
+          if (-not $tailscaleExe) {
+              Write-Error "Không tìm thấy file tailscale.exe ở bất kỳ thư mục hệ thống nào. Quá trình cài đặt đã lỗi."
               exit 1
           }
 
-          # Đã sửa lại đúng tên biến TAILSCALE_AUTHKEY khớp với GitHub của bạn
+          Write-Host "Tìm thấy Tailscale tại: $tailscaleExe"
+
+          # Khởi chạy Tailscale bằng Auth Key lấy từ Secrets
           & $tailscaleExe up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
           
           # Wait for Tailscale to assign an IP
